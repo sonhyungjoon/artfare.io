@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 버스 위치 추적기</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .bus-line {
+            position: relative;
+            width: 10px;
+            height: 200px;
+            background-color: #FFD400;
+            margin: 0 auto;
+        }
+        .station {
+            margin-bottom: 20px;
+        }
+        .bus-icon {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+        }
+        .station-name {
+            font-weight: bold;
+        }
+        .station-id {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .distance-time {
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="bus-line">
+            <div class="bus-icon" id="busIcon">
+                🚌
+            </div>
+        </div>
+        <div class="station">
+            <div id="currentLocation" class="station-name">
+                현재 위치
+            </div>
+            <div id="currentAddress" class="station-id">
+                위도: , 경도:
+            </div>
+        </div>
+        <div class="station">
+            <div id="nextStation" class="station-name">
+                다음 정류장
+            </div>
+            <div id="nextAddress" class="station-id">
+                정류장 정보
+            </div>
+        </div>
+        <div class="distance-time" id="distanceTime">
+            남은 거리: 0 km<br>
+            예상 소요 시간: 0분
+        </div>
+    </div>
+
+    <script>
+        const stations = [
+        { name: "오크우드 프리미어 코엑스 센터", lat: 37.5065, lon: 127.0587, address: "서울 강남구 테헤란로87길 46" },
+            { name: "용산구청", lat: 37.5324, lon: 126.9909, address: "서울 용산구 보광로60길 14-13" },
+            { name: "갤러리신라", lat: 37.5826, lon: 126.9817, address: "서울 종로구 삼청로 111" }
+        ];
+
+        let currentPosition = null;
+        let watchId = null;
+        let currentStationIndex = 0;
+
+        function distance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // 지구의 반경 (km)
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function updatePosition(position) {
+            currentPosition = position.coords;
+            document.getElementById('currentAddress').textContent = `위도: ${currentPosition.latitude.toFixed(6)}, 경도: ${currentPosition.longitude.toFixed(6)}`;
+
+            const nextStation = stations[currentStationIndex];
+            const distanceToNext = distance(currentPosition.latitude, currentPosition.longitude, nextStation.lat, nextStation.lon);
+            const estimatedTime = Math.round(distanceToNext / 0.4); // 평균 속도 40km/h 가정
+
+            document.getElementById('nextStation').textContent = `다음 정류장: ${nextStation.name}`;
+            document.getElementById('nextAddress').textContent = `위도: ${nextStation.lat.toFixed(6)}, 경도: ${nextStation.lon.toFixed(6)}`;
+            document.getElementById('distanceTime').innerHTML = `남은 거리: ${distanceToNext.toFixed(2)} km<br>예상 소요 시간: ${estimatedTime}분`;
+
+            // 버스 아이콘 위치 업데이트
+            const busIcon = document.getElementById('busIcon');
+            const progress = 1 - (distanceToNext / distance(stations[currentStationIndex].lat, stations[currentStationIndex].lon, nextStation.lat, nextStation.lon));
+            busIcon.style.top = `${progress * 100}%`;
+
+            // 다음 정류장에 도착했는지 확인
+            if (distanceToNext < 0.1) { // 100m 이내로 접근하면 다음 정류장으로 이동
+                currentStationIndex = (currentStationIndex + 1) % stations.length;
+            }
+        }
+
+        function handleLocationError(error) {
+            console.warn(`ERROR(${error.code}): ${error.message}`);
+        }
+
+        if ("geolocation" in navigator) {
+            navigator.permissions.query({name:'geolocation'}).then(function(result) {
+                if (result.state === 'granted') {
+                    startTracking();
+                } else if (result.state === 'prompt') {
+                    navigator.geolocation.getCurrentPosition(function(position) {
+                        startTracking();
+                    }, handleLocationError);
+                }
+            });
+        } else {
+            console.log("Geolocation is not supported by this browser.");
+        }
+
+        function startTracking() {
+            watchId = navigator.geolocation.watchPosition(updatePosition, handleLocationError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        }
+    </script>
+</body>
+</html>
